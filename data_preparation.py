@@ -27,8 +27,6 @@ prep_poly = prep(polygon)
 
 def preprocess_csv(file_path):
 
-    
-
     # Read only the needed columns
     df = pd.read_csv(
         file_path,
@@ -43,10 +41,9 @@ def preprocess_csv(file_path):
     
 
     pt_geoms = points(lats, lons)
-    start = time()
+    
     inside_mask = contains(polygon, pt_geoms)
-    end = time()
-    print(f"Preprocessing took {end - start:.2f} seconds")
+    
 
     df = df[inside_mask]
 
@@ -73,16 +70,17 @@ def preprocess_csv(file_path):
     )
     # Create binary label and drop VesselType
     df_coll['Label'] = (df_coll['VesselType'] == 37).astype(int)
-    df_coll.drop(columns=['MMSI','VesselType'], inplace=True)
+    # df_coll.drop(columns=['MMSI','VesselType'], inplace=True)
 
-    # print(df_coll)
+    # print(df_coll.head)
 
     return df_coll
 
 
+save_folder = '../AIS_data/'
+os.makedirs(save_folder, exist_ok=True)
 
-
-
+start_time = time()
 # --- MAIN LOOP ---
 for year in years:
     start = date(year, 1, 1)
@@ -124,10 +122,29 @@ for year in years:
         # 3) Preprocess & save
         print(f"Preprocessing {csv_name} …")
         df_proc = preprocess_csv(csv_path)
-        print(df_proc)
+
+        # print(df_proc)
+        # print(df_proc.head())
+
+        # Save to CSV
+        save_path = os.path.join(save_folder, f'{yyyy}_{mm:02d}_{dd:02d}.pkl')
+        df_proc.to_pickle(save_path)  # e.g., 'data.pkl'
+
+        print(f"  → saved to {save_path}") 
+
+
         os.remove(csv_path)
-        # os.remove(zip_path)
+        
 
         current += timedelta(days=1)
 
-        break
+        # break
+
+end_time = time()
+print(f"Preprocessing took {end_time - start_time:.2f} seconds")
+
+
+### --- TESTING ---
+# df = pd.read_csv(save_path)
+
+# print(df.head())
