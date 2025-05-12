@@ -10,7 +10,8 @@ from shapely.prepared import prep
 
 
 # --- CONFIG ---
-years    = [2019]
+# years    = [2019]
+years    = [2020, 2021, 2022, 2023]
 base_url = 'https://coast.noaa.gov/htdata/CMSP/AISDataHandler/{year}/AIS_{year}_{month:02d}_{day:02d}.zip'
 output_dir = 'data'
 zip_dir   = os.path.join(output_dir, 'zip')
