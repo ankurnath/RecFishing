@@ -17,13 +17,21 @@ def load_filtered_data(years, folder='../AIS_data', min_data_points=100):
     """
     files = os.listdir(folder)
     all_df = pd.DataFrame()
+    selected_MMSI = pd.read_csv('VT37MMSINumbers.csv')
 
     for file in files:
         if file.endswith('.pkl') and file.startswith(tuple(years)):
             df = pd.read_pickle(os.path.join(folder, file))
             df = df[df['LAT'].apply(lambda x: len(x) >= min_data_points)]
+            # date_str = file.replace('.pkl', '')  # '2019_05_11'
+            # date_obj = pd.to_datetime(date_str, format='%Y_%m_%d')
+            # df['date'] = date_obj
+            # df['weekday'] = date_obj.strftime('%A')  # e.g., 'Monday'
+
             all_df = pd.concat([all_df, df], ignore_index=True)
-            # break
+
+    all_df['Label'] = all_df['MMSI'].isin(selected_MMSI['MMSI']).astype(int)
+
     
     return all_df
 
@@ -60,6 +68,7 @@ def extract_features(row):
     elapsed = np.array(row['elapsed_s'])
     lat = np.array(row['LAT'])
     lon = np.array(row['LON'])
+    
 
     # Calculate duration
     duration = elapsed[-1] - elapsed[0]
@@ -72,19 +81,18 @@ def extract_features(row):
 
     accel = np.diff(speeds) / (dt[1:] + 1e-6) if len(speeds) > 1 else np.array([0.0])
 
-    # # Map weekday string to integer (0 = Monday, 6 = Sunday)
-    # weekday_map = {
-    #     'Monday': 0, 'Tuesday': 1, 'Wednesday': 2,
-    #     'Thursday': 3, 'Friday': 4, 'Saturday': 5, 'Sunday': 6
-    # }
-    # weekday_num = weekday_map.get(row['weekday'], -1)  # default -1 if unknown
-
     return pd.Series({
         'duration': duration,
         'lat_mean': lat.mean(),
-        'lat_std': lat.std(),
         'lon_mean': lon.mean(),
+        'lat_std': lat.std(),
         'lon_std': lon.std(),
+        'lat_median': np.median(lat),
+        'lon_median': np.median(lon),
+        'lat_min': lat.min(),
+        'lon_min': lon.min(),
+        'lat_max': lat.max(),
+        'lon_max': lon.max(),
         'lat_range': lat.max() - lat.min(),
         'lon_range': lon.max() - lon.min(),
         'bbox_area': (lat.max() - lat.min()) * (lon.max() - lon.min()),
@@ -98,5 +106,78 @@ def extract_features(row):
         'accel_mean': accel.mean(),
         'accel_std': accel.std(),
         'accel_max': accel.max(),
-        # 'weekday': weekday_num,
+        # 'wspd': row['WSPD'],
+        # 'gst': row['GST'],
+        # 'wvht': row['WVHT'],
+        # 'atmp': row['ATMP']
+        
     })
+
+
+# from tsfresh import extract_features
+# from tsfresh.utilities.dataframe_functions import impute
+# from tsfresh.feature_extraction import EfficientFCParameters
+
+# def extract_tsfresh_features(df):
+#     """
+#     Applies tsfresh to extract time-series features from trajectories.
+#     Assumes input df has columns:
+#         - 'id' : identifier per trajectory
+#         - 'elapsed_s' : list of timestamps
+#         - 'LAT' : list of latitudes
+#         - 'LON' : list of longitudes
+#         - optional: 'WSPD', 'GST', 'WVHT', 'ATMP'
+
+#     Returns:
+#         - DataFrame of tsfresh features joined with optional static features.
+#     """
+#     long_df = []
+
+#     # for _, row in df.iterrows():
+#     for id, row in df.iterrows():
+#         traj_id = id
+#         elapsed = row['elapsed_s']
+#         lat = row['LAT']
+#         lon = row['LON']
+
+#         for t, (e, la, lo) in enumerate(zip(elapsed, lat, lon)):
+#             long_df.append({
+#                 'id': traj_id,
+#                 'time': e,
+#                 'lat': la,
+#                 'lon': lo
+#             })
+
+#     long_df = pd.DataFrame(long_df)
+
+#     # Compute speed and acceleration
+#     def compute_speed_and_accel(group):
+#         group = group.sort_values('time')
+#         group['dlat'] = group['lat'].diff()
+#         group['dlon'] = group['lon'].diff()
+#         group['dt'] = group['time'].diff().replace(0, 1e-6)
+#         group['speed'] = np.sqrt(group['dlat']**2 + group['dlon']**2) / group['dt']
+#         group['accel'] = group['speed'].diff() / group['dt']
+#         return group
+
+#     long_df = long_df.groupby('id').apply(compute_speed_and_accel).reset_index(drop=True)
+
+#     # print(long_df.head())
+#     long_df.dropna(inplace=True)  # drop rows with NaN values
+
+#     print(long_df.head())
+
+#     # Extract features with tsfresh
+#     features = extract_features(
+#         long_df,
+#         column_id="id",
+#         column_sort="time",
+#         default_fc_parameters=EfficientFCParameters(),
+#         n_jobs=10
+#         # impute_function=impute
+#     )
+
+#     return features
+
+
+
