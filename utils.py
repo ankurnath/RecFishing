@@ -23,10 +23,10 @@ def load_filtered_data(years, folder='../AIS_data', min_data_points=100):
         if file.endswith('.pkl') and file.startswith(tuple(years)):
             df = pd.read_pickle(os.path.join(folder, file))
             df = df[df['LAT'].apply(lambda x: len(x) >= min_data_points)]
-            # date_str = file.replace('.pkl', '')  # '2019_05_11'
-            # date_obj = pd.to_datetime(date_str, format='%Y_%m_%d')
-            # df['date'] = date_obj
-            # df['weekday'] = date_obj.strftime('%A')  # e.g., 'Monday'
+            date_str = file.replace('.pkl', '')  # '2019_05_11'
+            date_obj = pd.to_datetime(date_str, format='%Y_%m_%d')
+            df['date'] = date_obj
+            df['weekday'] = date_obj.strftime('%A')  # e.g., 'Monday'
 
             all_df = pd.concat([all_df, df], ignore_index=True)
 
@@ -64,22 +64,46 @@ def load_model(load_path='best_model.pkl'):
     print(f"Model loaded from {load_path}")
     return model
 
+
+
 def extract_features(row):
     elapsed = np.array(row['elapsed_s'])
     lat = np.array(row['LAT'])
     lon = np.array(row['LON'])
-    
 
     # Calculate duration
     duration = elapsed[-1] - elapsed[0]
 
-    # Calculate simple speed approximations
-    dlat = np.diff(lat)
-    dlon = np.diff(lon)
-    dt = np.diff(elapsed) + 1e-6  # prevent division by zero
-    speeds = np.sqrt(dlat**2 + dlon**2) / dt
+    # Convert degrees to radians for Haversine formula
+    lat_rad = np.deg2rad(lat)
+    lon_rad = np.deg2rad(lon)
 
-    accel = np.diff(speeds) / (dt[1:] + 1e-6) if len(speeds) > 1 else np.array([0.0])
+    # Earth's radius (in km)
+    R = 6371.0
+
+    # Compute deltas
+    delta_lat = np.diff(lat_rad)
+    delta_lon = np.diff(lon_rad)
+
+    # Haversine formula
+    a = np.sin(delta_lat / 2.0) ** 2 + \
+        np.cos(lat_rad[:-1]) * np.cos(lat_rad[1:]) * np.sin(delta_lon / 2.0) ** 2
+    c = 2 * np.arcsin(np.sqrt(a))
+    distance = R * c  # distance between each consecutive point in km
+
+    # Time deltas (in seconds)
+    dt = np.diff(elapsed)
+    dt[dt == 0] = 1e-6  # prevent division by zero
+
+    # Speed in km/h
+    speeds = distance / (dt / 3600.0)
+
+    # Pad to align with original size
+    speeds = np.insert(speeds, 0, 0.0)
+
+    # Acceleration (km/h²)
+    accel = np.diff(speeds) / (dt[1:] / 3600.0) if len(speeds) > 1 else np.array([0.0])
+    accel = np.insert(accel, 0, 0.0)
 
     return pd.Series({
         'duration': duration,
@@ -106,11 +130,6 @@ def extract_features(row):
         'accel_mean': accel.mean(),
         'accel_std': accel.std(),
         'accel_max': accel.max(),
-        # 'wspd': row['WSPD'],
-        # 'gst': row['GST'],
-        # 'wvht': row['WVHT'],
-        # 'atmp': row['ATMP']
-        
     })
 
 
